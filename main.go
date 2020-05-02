@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"gotest.tools/gotestsum/cmd/tool"
+
 	"github.com/fatih/color"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -18,34 +20,49 @@ import (
 var version = "master"
 
 func main() {
-	name := os.Args[0]
-	flags, opts := setupFlags(name)
-	switch err := flags.Parse(os.Args[1:]); {
-	case err == pflag.ErrHelp:
-		os.Exit(0)
-	case err != nil:
+	err := route(os.Args)
+	if err == pflag.ErrHelp || err == nil {
+		return
+	}
+	switch err.(type) {
+	// TODO: on parse error print usage
+	//log.Error(err.Error())
+	//flags.Usage()
+	//os.Exit(1)
+	case *exec.ExitError:
+		// go test should already report the error to stderr, exit with
+		// the same status code
+		os.Exit(ExitCodeWithDefault(err))
+	default:
 		log.Error(err.Error())
-		flags.Usage()
-		os.Exit(1)
+		os.Exit(3)
+	}
+}
+
+func route(args []string) error {
+	if len(args) == 1 {
+		return runMain(args[0], args[1:])
+	}
+	switch args[1] {
+	case "tool":
+		return tool.Run(args[0]+" "+args[1], args[2:])
+	}
+	return runMain(args[0], args[1:])
+}
+
+func runMain(name string, args []string) error {
+	flags, opts := setupFlags(name)
+	if err := flags.Parse(args); err != nil {
+		return err
 	}
 	opts.args = flags.Args()
 	setupLogging(opts)
 
 	if opts.version {
 		fmt.Fprintf(os.Stdout, "gotestsum version %s\n", version)
-		os.Exit(0)
+		return nil
 	}
-
-	switch err := run(opts).(type) {
-	case nil:
-	case *exec.ExitError:
-		// go test should already report the error to stderr so just exit with
-		// the same status code
-		os.Exit(ExitCodeWithDefault(err))
-	default:
-		fmt.Fprintln(os.Stderr, name+": Error: "+err.Error())
-		os.Exit(3)
-	}
+	return run(opts)
 }
 
 func setupFlags(name string) (*pflag.FlagSet, *options) {
@@ -125,7 +142,6 @@ func setupLogging(opts *options) {
 	color.NoColor = opts.noColor
 }
 
-// TODO: add flag --max-failures
 func run(opts *options) error {
 	ctx := context.Background()
 	goTestProc, err := startGoTest(ctx, goTestCmdArgs(opts))
