@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -eu -o pipefail
+
+#export GIT_PAGER="less -RS"
+export LESS="-RS"
+grep pick .git/rebase-merge/git-rebase-todo | head -1 | awk '{print $2}' | xargs -r git show
+git stash save -q "saved by git-next"
