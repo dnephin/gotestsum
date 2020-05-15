@@ -72,6 +72,7 @@ Flags:
 `, name, name)
 		flags.PrintDefaults()
 	}
+	// TODO: GOTESTSUM_JSONFILE env var as default
 	flags.StringVar(&opts.jsonfile, "jsonfile", "",
 		"path to test2json output, defaults to stdin")
 	flags.DurationVar(&opts.threshold, "threshold", 100*time.Millisecond,
