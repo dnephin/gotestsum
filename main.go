@@ -93,7 +93,6 @@ Formats:
     standard-verbose        standard go test -v format
 `)
 	}
-	flags.BoolVar(&opts.debug, "debug", false, "enabled debug")
 	flags.StringVarP(&opts.format, "format", "f",
 		lookEnvWithDefault("GOTESTSUM_FORMAT", "short"),
 		"print format of test input")
@@ -102,18 +101,26 @@ Formats:
 	flags.StringVar(&opts.jsonFile, "jsonfile",
 		lookEnvWithDefault("GOTESTSUM_JSONFILE", ""),
 		"write all TestEvents to file")
-	flags.StringVar(&opts.junitFile, "junitfile",
-		lookEnvWithDefault("GOTESTSUM_JUNITFILE", ""),
-		"write a JUnit XML file")
 	flags.BoolVar(&opts.noColor, "no-color", color.NoColor, "disable color output")
 	flags.Var(opts.noSummary, "no-summary",
 		"do not print summary of: "+testjson.SummarizeAll.String())
+	flags.Var(opts.postRunHookCmd, "post-run-command",
+		"command to run after the tests have completed")
+
+	flags.StringVar(&opts.junitFile, "junitfile",
+		lookEnvWithDefault("GOTESTSUM_JUNITFILE", ""),
+		"write a JUnit XML file")
 	flags.Var(opts.junitTestSuiteNameFormat, "junitfile-testsuite-name",
 		"format the testsuite name field as: "+junitFieldFormatValues)
 	flags.Var(opts.junitTestCaseClassnameFormat, "junitfile-testcase-classname",
 		"format the testcase classname field as: "+junitFieldFormatValues)
-	flags.Var(opts.postRunHookCmd, "post-run-command",
-		"command to run after the tests have completed")
+
+	flags.IntVar(&opts.rerunFailsMaxAttempts, "rerun-fails-max-attempts", 0,
+		"rerun failed tests until each one passes once, or attempts exceeds max")
+	flags.IntVar(&opts.rerunFailsMaxInitialFailures, "rerun-fails-max-failures", 10,
+		"avoid re-run if initial run had more than this number of failures")
+
+	flags.BoolVar(&opts.debug, "debug", false, "enabled debug logging")
 	flags.BoolVar(&opts.version, "version", false, "show version and exit")
 	return flags, opts
 }
@@ -137,6 +144,8 @@ type options struct {
 	noSummary                    *noSummaryValue
 	junitTestSuiteNameFormat     *junitFieldFormatValue
 	junitTestCaseClassnameFormat *junitFieldFormatValue
+	rerunFailsMaxAttempts        int
+	rerunFailsMaxInitialFailures int
 	version                      bool
 
 	// shims for testing
@@ -153,11 +162,11 @@ func setupLogging(opts *options) {
 
 func run(opts *options) error {
 	ctx := context.Background()
-	goTestProc, err := startGoTest(ctx, goTestCmdArgs(opts))
+	// TODO: validate opts.args against rerunFailsMaxAttempts
+
+	goTestProc, err := startGoTest(ctx, goTestCmdArgs(opts, rerunOpts{}))
 	if err != nil {
-		return errors.Wrapf(err, "failed to run %s %s",
-			goTestProc.cmd.Path,
-			strings.Join(goTestProc.cmd.Args, " "))
+		return errors.Wrapf(err, "failed to run %s", strings.Join(goTestProc.cmd.Args, " "))
 	}
 	defer goTestProc.cancel()
 
@@ -174,6 +183,11 @@ func run(opts *options) error {
 	if err != nil {
 		return err
 	}
+	goTestExitErr := goTestProc.cmd.Wait()
+	if opts.rerunFailsMaxAttempts > 0 {
+		goTestExitErr = rerunFailed(ctx, opts, exec)
+	}
+
 	testjson.PrintSummary(opts.stdout, exec, opts.noSummary.value)
 	if err := writeJUnitFile(opts, exec); err != nil {
 		return err
@@ -181,28 +195,83 @@ func run(opts *options) error {
 	if err := postRunHook(opts, exec); err != nil {
 		return err
 	}
-	return goTestProc.cmd.Wait()
+	return goTestExitErr
 }
 
-func goTestCmdArgs(opts *options) []string {
-	args := opts.args
-	defaultArgs := []string{"go", "test"}
-	switch {
-	case opts.rawCommand:
-		return args
-	case len(args) == 0:
-		return append(defaultArgs, "-json", pathFromEnv("./..."))
-	case !hasJSONArg(args):
-		defaultArgs = append(defaultArgs, "-json")
+func runGoTest(ctx context.Context, cmdArgs []string, opts *options) (*testjson.Execution, error) {
+	goTestProc, err := startGoTest(ctx, cmdArgs)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to run %s", strings.Join(goTestProc.cmd.Args, " "))
 	}
-	if testPath := pathFromEnv(""); testPath != "" {
+	defer goTestProc.cancel()
+
+	handler, err := newEventHandler(opts)
+	if err != nil {
+		return nil, err
+	}
+	defer handler.Close() // nolint: errcheck
+	exec, err := testjson.ScanTestOutput(testjson.ScanConfig{
+		Stdout:  goTestProc.stdout,
+		Stderr:  goTestProc.stderr,
+		Handler: handler,
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Always return a non-nil Execution in this case, it may be used to rerun fails.
+	return exec, goTestProc.cmd.Wait()
+}
+
+type rerunOpts struct {
+	runFlag string
+	pkg     string
+}
+
+func (o rerunOpts) packageArg(defaultPkg string) string {
+	if o.pkg != "" {
+		return o.pkg
+	}
+	return lookEnvWithDefault("TEST_DIRECTORY", defaultPkg)
+}
+
+func goTestCmdArgs(opts *options, rerunOpts rerunOpts) []string {
+	if opts.rawCommand {
+		var result []string
+		result = append(result, opts.args...)
+		if rerunOpts.runFlag != "" {
+			result = append(result, rerunOpts.runFlag)
+		}
+		if rerunOpts.pkg != "" {
+			result = append(result, rerunOpts.pkg)
+		}
+		return result
+	}
+
+	args := opts.args
+	result := []string{"go", "test"}
+
+	if len(args) == 0 {
+		result = append(result, "-json")
+		if rerunOpts.runFlag != "" {
+			result = append(result, rerunOpts.runFlag)
+		}
+		return append(result, rerunOpts.packageArg("./..."))
+	}
+
+	if !hasJSONArg(args) {
+		result = append(result, "-json")
+	}
+	if rerunOpts.runFlag != "" {
+		// TODO: remove -run arg (add test case)
+		result = append(result, rerunOpts.runFlag)
+	}
+	if rerunOpts.pkg != "" {
+		// TODO: broken
+	}
+	if testPath := rerunOpts.packageArg(""); testPath != "" {
 		args = append(args, testPath)
 	}
-	return append(defaultArgs, args...)
-}
-
-func pathFromEnv(defaultPath string) string {
-	return lookEnvWithDefault("TEST_DIRECTORY", defaultPath)
+	return append(result, args...)
 }
 
 func hasJSONArg(args []string) bool {
@@ -246,4 +315,40 @@ func startGoTest(ctx context.Context, args []string) (proc, error) {
 		log.Debugf("go test pid: %d", p.cmd.Process.Pid)
 	}
 	return p, err
+}
+
+func rerunFailed(ctx context.Context, opts *options, exec *testjson.Execution) error {
+	failed := len(exec.Failed())
+	if failed > opts.rerunFailsMaxInitialFailures {
+		return fmt.Errorf(
+			"number of test failures (%d) exceeds maximum (%d) set by --rerun-fails-max-failures",
+			failed, opts.rerunFailsMaxInitialFailures)
+	}
+
+	var lastErr error
+	for failed > 0 {
+		failed = 0
+		for _, pkg := range exec.Packages() {
+			rerun := rerunOpts{
+				runFlag: goTestRunFlagFromTestCases(exec.Package(pkg).Failed),
+				pkg:     pkg,
+			}
+			cmdArgs := goTestCmdArgs(opts, rerun)
+			exec, lastErr = runGoTest(ctx, cmdArgs, opts)
+			failed += len(exec.Failed())
+		}
+	}
+	return lastErr
+}
+
+func goTestRunFlagFromTestCases(tcs []testjson.TestCase) string {
+	buf := new(strings.Builder)
+	buf.WriteString("-run=")
+	for i, tc := range tcs {
+		if i != 0 {
+			buf.WriteString("|")
+		}
+		buf.WriteString(tc.Test)
+	}
+	return buf.String()
 }
