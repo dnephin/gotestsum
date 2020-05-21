@@ -164,28 +164,31 @@ func run(opts *options) error {
 	ctx := context.Background()
 	// TODO: validate opts.args against rerunFailsMaxAttempts
 
+	handler, err := newEventHandler(opts)
+	if err != nil {
+		return err
+	}
+	defer handler.Close() // nolint: errcheck
+
 	goTestProc, err := startGoTest(ctx, goTestCmdArgs(opts, rerunOpts{}))
 	if err != nil {
 		return errors.Wrapf(err, "failed to run %s", strings.Join(goTestProc.cmd.Args, " "))
 	}
 	defer goTestProc.cancel()
 
-	handler, err := newEventHandler(opts)
-	if err != nil {
-		return err
+	cfg := testjson.ScanConfig{
+		Stdout:    goTestProc.stdout,
+		Stderr:    goTestProc.stderr,
+		Handler:   handler,
+		Execution: testjson.NewExecution(),
 	}
-	defer handler.Close() // nolint: errcheck
-	exec, err := testjson.ScanTestOutput(testjson.ScanConfig{
-		Stdout:  goTestProc.stdout,
-		Stderr:  goTestProc.stderr,
-		Handler: handler,
-	})
+	exec, err := testjson.ScanTestOutput(cfg)
 	if err != nil {
 		return err
 	}
 	goTestExitErr := goTestProc.cmd.Wait()
 	if opts.rerunFailsMaxAttempts > 0 {
-		goTestExitErr = rerunFailed(ctx, opts, exec)
+		goTestExitErr = rerunFailed(ctx, opts, cfg)
 	}
 
 	testjson.PrintSummary(opts.stdout, exec, opts.noSummary.value)
@@ -196,30 +199,6 @@ func run(opts *options) error {
 		return err
 	}
 	return goTestExitErr
-}
-
-func runGoTest(ctx context.Context, cmdArgs []string, opts *options) (*testjson.Execution, error) {
-	goTestProc, err := startGoTest(ctx, cmdArgs)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to run %s", strings.Join(goTestProc.cmd.Args, " "))
-	}
-	defer goTestProc.cancel()
-
-	handler, err := newEventHandler(opts)
-	if err != nil {
-		return nil, err
-	}
-	defer handler.Close() // nolint: errcheck
-	exec, err := testjson.ScanTestOutput(testjson.ScanConfig{
-		Stdout:  goTestProc.stdout,
-		Stderr:  goTestProc.stderr,
-		Handler: handler,
-	})
-	if err != nil {
-		return nil, err
-	}
-	// Always return a non-nil Execution in this case, it may be used to rerun fails.
-	return exec, goTestProc.cmd.Wait()
 }
 
 type rerunOpts struct {
@@ -317,7 +296,8 @@ func startGoTest(ctx context.Context, args []string) (proc, error) {
 	return p, err
 }
 
-func rerunFailed(ctx context.Context, opts *options, exec *testjson.Execution) error {
+func rerunFailed(ctx context.Context, opts *options, cfg testjson.ScanConfig) error {
+	exec := cfg.Execution
 	failed := len(exec.Failed())
 	if failed > opts.rerunFailsMaxInitialFailures {
 		return fmt.Errorf(
@@ -326,16 +306,32 @@ func rerunFailed(ctx context.Context, opts *options, exec *testjson.Execution) e
 	}
 
 	var lastErr error
-	for failed > 0 {
+	for count := 0; failed > 0 && count < opts.rerunFailsMaxAttempts; count++ {
 		failed = 0
+
 		for _, pkg := range exec.Packages() {
+			prevFailed := len(exec.Failed())
+
 			rerun := rerunOpts{
 				runFlag: goTestRunFlagFromTestCases(exec.Package(pkg).Failed),
 				pkg:     pkg,
 			}
 			cmdArgs := goTestCmdArgs(opts, rerun)
-			exec, lastErr = runGoTest(ctx, cmdArgs, opts)
-			failed += len(exec.Failed())
+			goTestProc, err := startGoTest(ctx, cmdArgs)
+			if err != nil {
+				return errors.Wrapf(err, "failed to run %s", strings.Join(goTestProc.cmd.Args, " "))
+			}
+
+			cfg.Stdout = goTestProc.stdout
+			cfg.Stderr = goTestProc.stderr
+			if _, err := testjson.ScanTestOutput(cfg); err != nil {
+				goTestProc.cancel()
+				return err
+			}
+			lastErr = goTestProc.cmd.Wait()
+			goTestProc.cancel()
+
+			failed += prevFailed - len(exec.Failed())
 		}
 	}
 	return lastErr
