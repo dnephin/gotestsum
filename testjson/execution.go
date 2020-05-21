@@ -371,6 +371,9 @@ func (e *Execution) Elapsed() time.Duration {
 
 // Failed returns a list of all the failed test cases.
 func (e *Execution) Failed() []TestCase {
+	if e == nil {
+		return nil
+	}
 	var failed []TestCase //nolint:prealloc
 	for _, name := range sortedKeys(e.packages) {
 		pkg := e.packages[name]

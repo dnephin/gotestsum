@@ -204,22 +204,6 @@ func run(opts *options) error {
 	return goTestExitErr
 }
 
-type rerunOpts struct {
-	runFlag string
-	pkg     string
-}
-
-func (o rerunOpts) Args() []string {
-	var result []string
-	if o.runFlag != "" {
-		result = append(result, o.runFlag)
-	}
-	if o.pkg != "" {
-		result = append(result, o.pkg)
-	}
-	return result
-}
-
 func goTestCmdArgs(opts *options, rerunOpts rerunOpts) []string {
 	if opts.rawCommand {
 		var result []string
@@ -286,7 +270,6 @@ func cmdArgPackageList(opts *options, rerunOpts rerunOpts, defPkgList ...string)
 	return result
 }
 
-// TODO: test cases
 func argIndex(flag string, args []string) int {
 	for i, arg := range args {
 		if arg == "-"+flag || arg == "--"+flag {
@@ -328,62 +311,4 @@ func startGoTest(ctx context.Context, args []string) (proc, error) {
 		log.Debugf("go test pid: %d", p.cmd.Process.Pid)
 	}
 	return p, err
-}
-
-func rerunFailed(ctx context.Context, opts *options, cfg testjson.ScanConfig) error {
-	exec := cfg.Execution
-	failed := len(exec.Failed())
-	if failed > opts.rerunFailsMaxInitialFailures {
-		return fmt.Errorf(
-			"number of test failures (%d) exceeds maximum (%d) set by --rerun-fails-max-failures",
-			failed, opts.rerunFailsMaxInitialFailures)
-	}
-
-	var lastErr error
-	for count := 0; failed > 0 && count < opts.rerunFailsMaxAttempts; count++ {
-		failed = 0
-
-		for _, pkg := range exec.Packages() {
-			pkgFailures := exec.Package(pkg).Failed
-			// TODO: how to get the count of packages failed since the last run?
-			if len(pkgFailures) < 1 {
-				continue
-			}
-			prevFailed := len(exec.Failed())
-
-			rerun := rerunOpts{
-				runFlag: goTestRunFlagFromTestCases(pkgFailures),
-				pkg:     pkg,
-			}
-			cmdArgs := goTestCmdArgs(opts, rerun)
-			goTestProc, err := startGoTest(ctx, cmdArgs)
-			if err != nil {
-				return errors.Wrapf(err, "failed to run %s", strings.Join(goTestProc.cmd.Args, " "))
-			}
-
-			cfg.Stdout = goTestProc.stdout
-			cfg.Stderr = goTestProc.stderr
-			if _, err := testjson.ScanTestOutput(cfg); err != nil {
-				goTestProc.cancel()
-				return err
-			}
-			lastErr = goTestProc.cmd.Wait()
-			goTestProc.cancel()
-
-			failed += len(exec.Failed()) - prevFailed
-		}
-	}
-	return lastErr
-}
-
-func goTestRunFlagFromTestCases(tcs []testjson.TestCase) string {
-	buf := new(strings.Builder)
-	buf.WriteString("-run=")
-	for i, tc := range tcs {
-		if i != 0 {
-			buf.WriteString("|")
-		}
-		buf.WriteString(tc.Test)
-	}
-	return buf.String()
 }
