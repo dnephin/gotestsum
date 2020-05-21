@@ -119,6 +119,8 @@ Formats:
 		"rerun failed tests until each one passes once, or attempts exceeds max")
 	flags.IntVar(&opts.rerunFailsMaxInitialFailures, "rerun-fails-max-failures", 10,
 		"avoid re-run if initial run had more than this number of failures")
+	flags.StringSliceVar(&opts.rerunFailsPackageList, "rerun-fails-pkg-list", nil,
+		"list of package to test, must be removed from positional args")
 
 	flags.BoolVar(&opts.debug, "debug", false, "enabled debug logging")
 	flags.BoolVar(&opts.version, "version", false, "show version and exit")
@@ -146,6 +148,7 @@ type options struct {
 	junitTestCaseClassnameFormat *junitFieldFormatValue
 	rerunFailsMaxAttempts        int
 	rerunFailsMaxInitialFailures int
+	rerunFailsPackageList        []string
 	version                      bool
 
 	// shims for testing
@@ -206,23 +209,22 @@ type rerunOpts struct {
 	pkg     string
 }
 
-func (o rerunOpts) packageArg(defaultPkg string) string {
-	if o.pkg != "" {
-		return o.pkg
+func (o rerunOpts) Args() []string {
+	var result []string
+	if o.runFlag != "" {
+		result = append(result, o.runFlag)
 	}
-	return lookEnvWithDefault("TEST_DIRECTORY", defaultPkg)
+	if o.pkg != "" {
+		result = append(result, o.pkg)
+	}
+	return result
 }
 
 func goTestCmdArgs(opts *options, rerunOpts rerunOpts) []string {
 	if opts.rawCommand {
 		var result []string
 		result = append(result, opts.args...)
-		if rerunOpts.runFlag != "" {
-			result = append(result, rerunOpts.runFlag)
-		}
-		if rerunOpts.pkg != "" {
-			result = append(result, rerunOpts.pkg)
-		}
+		result = append(result, rerunOpts.Args()...)
 		return result
 	}
 
@@ -234,32 +236,64 @@ func goTestCmdArgs(opts *options, rerunOpts rerunOpts) []string {
 		if rerunOpts.runFlag != "" {
 			result = append(result, rerunOpts.runFlag)
 		}
-		return append(result, rerunOpts.packageArg("./..."))
+		return append(result, cmdArgPackageList(opts, rerunOpts, "./...")...)
 	}
 
-	if !hasJSONArg(args) {
+	if argIndex("json", args) < 0 {
 		result = append(result, "-json")
 	}
+
 	if rerunOpts.runFlag != "" {
-		// TODO: remove -run arg (add test case)
+		// TODO: test cases: -run arg at end, start, middle
+		// Remove any existing run arg, it needs to be replaced with our new one
+		// and duplicate args are not allowed by 'go test'.
+		runIndex := argIndex("run", args)
+		if runIndex > 0 && runIndex+1 < len(args) {
+			args = append(args[:runIndex], args[runIndex+1:]...)
+		}
 		result = append(result, rerunOpts.runFlag)
 	}
-	if rerunOpts.pkg != "" {
-		// TODO: broken
+
+	// The package list is before the -args flag, or at the end of the args list
+	// if the -args flag is not in args.
+	// The -args flag is a 'go test' flag that indicates that all subsequent
+	// args should be passed to the test binary. It requires that the list of
+	// packages comes before -args, so we re-use it as a placeholder in the case
+	// where some args must be passed to the test binary.
+	pkgListIndex := len(args)
+	if i := argIndex("args", args); i >= 0 {
+		pkgListIndex = i
 	}
-	if testPath := rerunOpts.packageArg(""); testPath != "" {
-		args = append(args, testPath)
-	}
-	return append(result, args...)
+
+	result = append(result, args[:pkgListIndex]...)
+	result = append(result, cmdArgPackageList(opts, rerunOpts)...)
+	result = append(result, args[pkgListIndex:]...)
+	return result
 }
 
-func hasJSONArg(args []string) bool {
-	for _, arg := range args {
-		if arg == "-json" || arg == "--json" {
-			return true
+func cmdArgPackageList(opts *options, rerunOpts rerunOpts, defPkgList ...string) []string {
+	var result []string
+	switch {
+	case rerunOpts.pkg != "":
+		result = append(result, rerunOpts.pkg)
+	case len(opts.rerunFailsPackageList) > 0:
+		result = append(result, opts.rerunFailsPackageList...)
+	case os.Getenv("TEST_DIRECTORY") != "":
+		result = append(result, os.Getenv("TEST_DIRECTORY"))
+	default:
+		result = append(result, defPkgList...)
+	}
+	return result
+}
+
+// TODO: test cases
+func argIndex(flag string, args []string) int {
+	for i, arg := range args {
+		if arg == "-"+flag || arg == "--"+flag {
+			return i
 		}
 	}
-	return false
+	return -1
 }
 
 type proc struct {

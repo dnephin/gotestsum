@@ -31,6 +31,12 @@ func TestGoTestCmdArgs(t *testing.T) {
 			opts:     &options{},
 			expected: []string{"go", "test", "-json", "./..."},
 		},
+		"no args, with rerunPackageList arg": {
+			opts: &options{
+				rerunFailsPackageList: []string{"./pkg"},
+			},
+			expected: []string{"go", "test", "-json", "./pkg"},
+		},
 		"TEST_DIRECTORY env var no args": {
 			opts:     &options{},
 			env:      []string{"TEST_DIRECTORY=testdir"},
@@ -97,7 +103,8 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"no -json arg, with rerunOpts": {
 			opts: &options{
-				args: []string{"-timeout=2m", "./pkg"},
+				args:                  []string{"-timeout=2m"},
+				rerunFailsPackageList: []string{"./pkg"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
@@ -107,7 +114,8 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"with -json arg, with rerunOpts": {
 			opts: &options{
-				args: []string{"-json", "-timeout=2m", "./pkg"},
+				args:                  []string{"-json", "-timeout=2m"},
+				rerunFailsPackageList: []string{"./pkg"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
@@ -115,15 +123,62 @@ func TestGoTestCmdArgs(t *testing.T) {
 			},
 			expected: []string{"go", "test", "-run=TestOne|TestTwo", "-json", "-timeout=2m", "./fails"},
 		},
-		"multiple path args, with rerunOpts": {
+		"with args, with reunFailsPackageList args, with rerunOpts": {
 			opts: &options{
-				args: []string{"-timeout=2m", "./pkg1", "./pkg2", "./pkg3"},
+				args:                  []string{"-timeout=2m"},
+				rerunFailsPackageList: []string{"./pkg1", "./pkg2", "./pkg3"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
 				pkg:     "./fails",
 			},
 			expected: []string{"go", "test", "-json", "-run=TestOne|TestTwo", "-timeout=2m", "./fails"},
+		},
+		"with args, with reunFailsPackageList": {
+			opts: &options{
+				args:                  []string{"-timeout=2m"},
+				rerunFailsPackageList: []string{"./pkg1", "./pkg2", "./pkg3"},
+			},
+			expected: []string{"go", "test", "-json", "-timeout=2m", "./pkg1", "./pkg2", "./pkg3"},
+		},
+		"reunFailsPackageList args, with rerunOpts ": {
+			opts: &options{
+				rerunFailsPackageList: []string{"./pkg1", "./pkg2", "./pkg3"},
+			},
+			rerunOpts: rerunOpts{
+				runFlag: "-run=TestOne|TestTwo",
+				pkg:     "./fails",
+			},
+			expected: []string{"go", "test", "-json", "-run=TestOne|TestTwo", "./fails"},
+		},
+		"reunFailsPackageList args, with rerunOpts, with -args ": {
+			opts: &options{
+				args:                  []string{"before", "-args", "after"},
+				rerunFailsPackageList: []string{"./pkg1"},
+			},
+			rerunOpts: rerunOpts{
+				runFlag: "-run=TestOne|TestTwo",
+				pkg:     "./fails",
+			},
+			expected: []string{"go", "test", "-json", "-run=TestOne|TestTwo", "before", "./fails", "-args", "after"},
+		},
+		"reunFailsPackageList args, with rerunOpts, with -args at end": {
+			opts: &options{
+				args:                  []string{"before", "-args"},
+				rerunFailsPackageList: []string{"./pkg1"},
+			},
+			rerunOpts: rerunOpts{
+				runFlag: "-run=TestOne|TestTwo",
+				pkg:     "./fails",
+			},
+			expected: []string{"go", "test", "-json", "-run=TestOne|TestTwo", "before", "./fails", "-args"},
+		},
+		"reunFailsPackageList args, with -args at start": {
+			opts: &options{
+				args:                  []string{"-args", "after"},
+				rerunFailsPackageList: []string{"./pkg1"},
+			},
+			expected: []string{"go", "test", "-json", "./pkg1", "-args", "after"},
 		},
 	}
 
