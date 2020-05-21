@@ -344,10 +344,15 @@ func rerunFailed(ctx context.Context, opts *options, cfg testjson.ScanConfig) er
 		failed = 0
 
 		for _, pkg := range exec.Packages() {
+			pkgFailures := exec.Package(pkg).Failed
+			// TODO: how to get the count of packages failed since the last run?
+			if len(pkgFailures) < 1 {
+				continue
+			}
 			prevFailed := len(exec.Failed())
 
 			rerun := rerunOpts{
-				runFlag: goTestRunFlagFromTestCases(exec.Package(pkg).Failed),
+				runFlag: goTestRunFlagFromTestCases(pkgFailures),
 				pkg:     pkg,
 			}
 			cmdArgs := goTestCmdArgs(opts, rerun)
@@ -365,7 +370,7 @@ func rerunFailed(ctx context.Context, opts *options, cfg testjson.ScanConfig) er
 			lastErr = goTestProc.cmd.Wait()
 			goTestProc.cancel()
 
-			failed += prevFailed - len(exec.Failed())
+			failed += len(exec.Failed()) - prevFailed
 		}
 	}
 	return lastErr
