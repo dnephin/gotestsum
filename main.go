@@ -223,7 +223,7 @@ func goTestCmdArgs(opts *options, rerunOpts rerunOpts) []string {
 		return append(result, cmdArgPackageList(opts, rerunOpts, "./...")...)
 	}
 
-	if argIndex("json", args) < 0 {
+	if boolArgIndex("json", args) < 0 {
 		result = append(result, "-json")
 	}
 
@@ -231,9 +231,9 @@ func goTestCmdArgs(opts *options, rerunOpts rerunOpts) []string {
 		// TODO: test cases: -run arg at end, start, middle
 		// Remove any existing run arg, it needs to be replaced with our new one
 		// and duplicate args are not allowed by 'go test'.
-		runIndex := argIndex("run", args)
-		if runIndex > 0 && runIndex+1 < len(args) {
-			args = append(args[:runIndex], args[runIndex+1:]...)
+		runIndex, runIndexEnd := argIndex("run", args)
+		if runIndex >= 0 && runIndexEnd < len(args) {
+			args = append(args[:runIndex], args[runIndexEnd+1:]...)
 		}
 		result = append(result, rerunOpts.runFlag)
 	}
@@ -245,7 +245,7 @@ func goTestCmdArgs(opts *options, rerunOpts rerunOpts) []string {
 	// packages comes before -args, so we re-use it as a placeholder in the case
 	// where some args must be passed to the test binary.
 	pkgListIndex := len(args)
-	if i := argIndex("args", args); i >= 0 {
+	if i := boolArgIndex("args", args); i >= 0 {
 		pkgListIndex = i
 	}
 
@@ -270,13 +270,25 @@ func cmdArgPackageList(opts *options, rerunOpts rerunOpts, defPkgList ...string)
 	return result
 }
 
-func argIndex(flag string, args []string) int {
+func boolArgIndex(flag string, args []string) int {
 	for i, arg := range args {
 		if arg == "-"+flag || arg == "--"+flag {
 			return i
 		}
 	}
 	return -1
+}
+
+func argIndex(flag string, args []string) (start, end int) {
+	for i, arg := range args {
+		if arg == "-"+flag || arg == "--"+flag {
+			return i, i + 1
+		}
+		if strings.HasPrefix(arg, "-"+flag+"=") || strings.HasPrefix(arg, "--"+flag+"=") {
+			return i, i
+		}
+	}
+	return -1, -1
 }
 
 type proc struct {

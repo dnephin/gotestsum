@@ -180,6 +180,39 @@ func TestGoTestCmdArgs(t *testing.T) {
 			},
 			expected: []string{"go", "test", "-json", "./pkg1", "-args", "after"},
 		},
+		"-run arg at start, with rerunOpts ": {
+			opts: &options{
+				args:                  []string{"-run=TestFoo", "-args"},
+				rerunFailsPackageList: []string{"./pkg"},
+			},
+			rerunOpts: rerunOpts{
+				runFlag: "-run=TestOne|TestTwo",
+				pkg:     "./fails",
+			},
+			expected: []string{"go", "test", "-json", "-run=TestOne|TestTwo", "./fails", "-args"},
+		},
+		"-run arg in middle, with rerunOpts ": {
+			opts: &options{
+				args:                  []string{"-count", "1", "--run", "TestFoo", "-args"},
+				rerunFailsPackageList: []string{"./pkg"},
+			},
+			rerunOpts: rerunOpts{
+				runFlag: "-run=TestOne|TestTwo",
+				pkg:     "./fails",
+			},
+			expected: []string{"go", "test", "-json", "-run=TestOne|TestTwo", "-count", "1", "./fails", "-args"},
+		},
+		"-run arg at end with missing value, with rerunOpts ": {
+			opts: &options{
+				args:                  []string{"-count", "1", "-run"},
+				rerunFailsPackageList: []string{"./pkg"},
+			},
+			rerunOpts: rerunOpts{
+				runFlag: "-run=TestOne|TestTwo",
+				pkg:     "./fails",
+			},
+			expected: []string{"go", "test", "-json", "-run=TestOne|TestTwo", "-count", "1", "-run", "./fails"},
+		},
 	}
 
 	for name, tc := range testcases {
