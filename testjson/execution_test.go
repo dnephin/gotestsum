@@ -28,7 +28,7 @@ func TestPackage_Elapsed(t *testing.T) {
 }
 
 func TestExecution_Add_PackageCoverage(t *testing.T) {
-	exec := NewExecution()
+	exec := newExecution()
 	exec.add(TestEvent{
 		Package: "mytestpkg",
 		Action:  ActionOutput,

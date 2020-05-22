@@ -119,8 +119,9 @@ Formats:
 		"rerun failed tests until each one passes once, or attempts exceeds max")
 	flags.IntVar(&opts.rerunFailsMaxInitialFailures, "rerun-fails-max-failures", 10,
 		"avoid re-run if initial run had more than this number of failures")
-	flags.StringSliceVar(&opts.rerunFailsPackageList, "rerun-fails-pkg-list", nil,
-		"list of package to test, must be removed from positional args")
+	// TODO: make this a space separated list instead.
+	flags.StringSliceVar(&opts.Packages, "packages", nil,
+		"space separated list of package to test")
 
 	flags.BoolVar(&opts.debug, "debug", false, "enabled debug logging")
 	flags.BoolVar(&opts.version, "version", false, "show version and exit")
@@ -148,12 +149,21 @@ type options struct {
 	junitTestCaseClassnameFormat *junitFieldFormatValue
 	rerunFailsMaxAttempts        int
 	rerunFailsMaxInitialFailures int
-	rerunFailsPackageList        []string
+	Packages                     []string
 	version                      bool
 
 	// shims for testing
 	stdout io.Writer
 	stderr io.Writer
+}
+
+func (o options) Validate() error {
+	if o.rerunFailsMaxAttempts > 0 && len(o.args) > 0 && !o.rawCommand && len(o.Packages) == 0 {
+		return fmt.Errorf(
+			"when go test args are used with --rerun-fails-max-attempts " +
+				"the list of packages to test must be specified by the --packages flag")
+	}
+	return nil
 }
 
 func setupLogging(opts *options) {
@@ -165,7 +175,9 @@ func setupLogging(opts *options) {
 
 func run(opts *options) error {
 	ctx := context.Background()
-	// TODO: validate opts.args against rerunFailsMaxAttempts
+	if err := opts.Validate(); err != nil {
+		return err
+	}
 
 	handler, err := newEventHandler(opts)
 	if err != nil {
@@ -180,10 +192,9 @@ func run(opts *options) error {
 	defer goTestProc.cancel()
 
 	cfg := testjson.ScanConfig{
-		Stdout:    goTestProc.stdout,
-		Stderr:    goTestProc.stderr,
-		Handler:   handler,
-		Execution: testjson.NewExecution(),
+		Stdout:  goTestProc.stdout,
+		Stderr:  goTestProc.stderr,
+		Handler: handler,
 	}
 	exec, err := testjson.ScanTestOutput(cfg)
 	if err != nil {
@@ -260,8 +271,8 @@ func cmdArgPackageList(opts *options, rerunOpts rerunOpts, defPkgList ...string)
 	switch {
 	case rerunOpts.pkg != "":
 		result = append(result, rerunOpts.pkg)
-	case len(opts.rerunFailsPackageList) > 0:
-		result = append(result, opts.rerunFailsPackageList...)
+	case len(opts.Packages) > 0:
+		result = append(result, opts.Packages...)
 	case os.Getenv("TEST_DIRECTORY") != "":
 		result = append(result, os.Getenv("TEST_DIRECTORY"))
 	default:

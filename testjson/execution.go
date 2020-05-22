@@ -434,9 +434,9 @@ func (e *Execution) end() {
 	}
 }
 
-// NewExecution returns a new Execution and records the current time as the
+// newExecution returns a new Execution and records the current time as the
 // time the test execution started.
-func NewExecution() *Execution {
+func newExecution() *Execution {
 	return &Execution{
 		started:  clock.Now(),
 		packages: make(map[string]*Package),
@@ -485,7 +485,7 @@ func ScanTestOutput(config ScanConfig) (*Execution, error) {
 	}
 	execution := config.Execution
 	if execution == nil {
-		execution = NewExecution()
+		execution = newExecution()
 	}
 	var group errgroup.Group
 	group.Go(func() error {

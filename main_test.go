@@ -33,7 +33,7 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"no args, with rerunPackageList arg": {
 			opts: &options{
-				rerunFailsPackageList: []string{"./pkg"},
+				Packages: []string{"./pkg"},
 			},
 			expected: []string{"go", "test", "-json", "./pkg"},
 		},
@@ -103,8 +103,8 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"no -json arg, with rerunOpts": {
 			opts: &options{
-				args:                  []string{"-timeout=2m"},
-				rerunFailsPackageList: []string{"./pkg"},
+				args:     []string{"-timeout=2m"},
+				Packages: []string{"./pkg"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
@@ -114,8 +114,8 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"with -json arg, with rerunOpts": {
 			opts: &options{
-				args:                  []string{"-json", "-timeout=2m"},
-				rerunFailsPackageList: []string{"./pkg"},
+				args:     []string{"-json", "-timeout=2m"},
+				Packages: []string{"./pkg"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
@@ -125,8 +125,8 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"with args, with reunFailsPackageList args, with rerunOpts": {
 			opts: &options{
-				args:                  []string{"-timeout=2m"},
-				rerunFailsPackageList: []string{"./pkg1", "./pkg2", "./pkg3"},
+				args:     []string{"-timeout=2m"},
+				Packages: []string{"./pkg1", "./pkg2", "./pkg3"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
@@ -136,14 +136,14 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"with args, with reunFailsPackageList": {
 			opts: &options{
-				args:                  []string{"-timeout=2m"},
-				rerunFailsPackageList: []string{"./pkg1", "./pkg2", "./pkg3"},
+				args:     []string{"-timeout=2m"},
+				Packages: []string{"./pkg1", "./pkg2", "./pkg3"},
 			},
 			expected: []string{"go", "test", "-json", "-timeout=2m", "./pkg1", "./pkg2", "./pkg3"},
 		},
 		"reunFailsPackageList args, with rerunOpts ": {
 			opts: &options{
-				rerunFailsPackageList: []string{"./pkg1", "./pkg2", "./pkg3"},
+				Packages: []string{"./pkg1", "./pkg2", "./pkg3"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
@@ -153,8 +153,8 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"reunFailsPackageList args, with rerunOpts, with -args ": {
 			opts: &options{
-				args:                  []string{"before", "-args", "after"},
-				rerunFailsPackageList: []string{"./pkg1"},
+				args:     []string{"before", "-args", "after"},
+				Packages: []string{"./pkg1"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
@@ -164,8 +164,8 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"reunFailsPackageList args, with rerunOpts, with -args at end": {
 			opts: &options{
-				args:                  []string{"before", "-args"},
-				rerunFailsPackageList: []string{"./pkg1"},
+				args:     []string{"before", "-args"},
+				Packages: []string{"./pkg1"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
@@ -175,15 +175,15 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"reunFailsPackageList args, with -args at start": {
 			opts: &options{
-				args:                  []string{"-args", "after"},
-				rerunFailsPackageList: []string{"./pkg1"},
+				args:     []string{"-args", "after"},
+				Packages: []string{"./pkg1"},
 			},
 			expected: []string{"go", "test", "-json", "./pkg1", "-args", "after"},
 		},
 		"-run arg at start, with rerunOpts ": {
 			opts: &options{
-				args:                  []string{"-run=TestFoo", "-args"},
-				rerunFailsPackageList: []string{"./pkg"},
+				args:     []string{"-run=TestFoo", "-args"},
+				Packages: []string{"./pkg"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
@@ -193,8 +193,8 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"-run arg in middle, with rerunOpts ": {
 			opts: &options{
-				args:                  []string{"-count", "1", "--run", "TestFoo", "-args"},
-				rerunFailsPackageList: []string{"./pkg"},
+				args:     []string{"-count", "1", "--run", "TestFoo", "-args"},
+				Packages: []string{"./pkg"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
@@ -204,8 +204,8 @@ func TestGoTestCmdArgs(t *testing.T) {
 		},
 		"-run arg at end with missing value, with rerunOpts ": {
 			opts: &options{
-				args:                  []string{"-count", "1", "-run"},
-				rerunFailsPackageList: []string{"./pkg"},
+				args:     []string{"-count", "1", "-run"},
+				Packages: []string{"./pkg"},
 			},
 			rerunOpts: rerunOpts{
 				runFlag: "-run=TestOne|TestTwo",
