@@ -62,8 +62,6 @@ func rerunFailed(ctx context.Context, opts *options, scanConfig testjson.ScanCon
 			}
 			lastErr = goTestProc.cmd.Wait()
 			goTestProc.cancel()
-			// TODO: add any unfinished tests to failures
-
 			rec = nextRec
 		}
 	}
