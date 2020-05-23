@@ -57,11 +57,9 @@ func rerunFailed(ctx context.Context, opts *options, scanConfig testjson.ScanCon
 				Execution: scanConfig.Execution,
 			}
 			if _, err := testjson.ScanTestOutput(cfg); err != nil {
-				goTestProc.cancel()
 				return err
 			}
 			lastErr = goTestProc.cmd.Wait()
-			goTestProc.cancel()
 			rec = nextRec
 		}
 	}

@@ -173,7 +173,9 @@ func setupLogging(opts *options) {
 }
 
 func run(opts *options) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	if err := opts.Validate(); err != nil {
 		return err
 	}
@@ -188,7 +190,6 @@ func run(opts *options) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to run %s", strings.Join(goTestProc.cmd.Args, " "))
 	}
-	defer goTestProc.cancel()
 
 	cfg := testjson.ScanConfig{
 		Stdout:  goTestProc.stdout,
@@ -309,7 +310,6 @@ type proc struct {
 	cmd    *exec.Cmd
 	stdout io.Reader
 	stderr io.Reader
-	cancel func()
 }
 
 func startGoTest(ctx context.Context, args []string) (proc, error) {
@@ -317,10 +317,8 @@ func startGoTest(ctx context.Context, args []string) (proc, error) {
 		return proc{}, errors.New("missing command to run")
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
 	p := proc{
-		cmd:    exec.CommandContext(ctx, args[0], args[1:]...),
-		cancel: cancel,
+		cmd: exec.CommandContext(ctx, args[0], args[1:]...),
 	}
 	log.Debugf("exec: %s", p.cmd.Args)
 	var err error
