@@ -119,8 +119,7 @@ Formats:
 		"rerun failed tests until each one passes once, or attempts exceeds max")
 	flags.IntVar(&opts.rerunFailsMaxInitialFailures, "rerun-fails-max-failures", 10,
 		"avoid re-run if initial run had more than this number of failures")
-	// TODO: make this a space separated list instead.
-	flags.StringSliceVar(&opts.Packages, "packages", nil,
+	flags.Var((*stringSlice)(&opts.Packages), "packages",
 		"space separated list of package to test")
 
 	flags.BoolVar(&opts.debug, "debug", false, "enabled debug logging")
@@ -250,20 +249,10 @@ func goTestCmdArgs(opts *options, rerunOpts rerunOpts) []string {
 		result = append(result, rerunOpts.runFlag)
 	}
 
-	// The package list is before the -args flag, or at the end of the args list
-	// if the -args flag is not in args.
-	// The -args flag is a 'go test' flag that indicates that all subsequent
-	// args should be passed to the test binary. It requires that the list of
-	// packages comes before -args, so we re-use it as a placeholder in the case
-	// where some args must be passed to the test binary.
-	pkgListIndex := len(args)
-	if i := boolArgIndex("args", args); i >= 0 {
-		pkgListIndex = i
-	}
-
-	result = append(result, args[:pkgListIndex]...)
+	pkgArgIndex := findPkgArgPosition(args)
+	result = append(result, args[:pkgArgIndex]...)
 	result = append(result, cmdArgPackageList(opts, rerunOpts)...)
-	result = append(result, args[pkgListIndex:]...)
+	result = append(result, args[pkgArgIndex:]...)
 	return result
 }
 
@@ -301,6 +290,19 @@ func argIndex(flag string, args []string) (start, end int) {
 		}
 	}
 	return -1, -1
+}
+
+// The package list is before the -args flag, or at the end of the args list
+// if the -args flag is not in args.
+// The -args flag is a 'go test' flag that indicates that all subsequent
+// args should be passed to the test binary. It requires that the list of
+// packages comes before -args, so we re-use it as a placeholder in the case
+// where some args must be passed to the test binary.
+func findPkgArgPosition(args []string) int {
+	if i := boolArgIndex("args", args); i >= 0 {
+		return i
+	}
+	return len(args)
 }
 
 type proc struct {
