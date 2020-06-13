@@ -1,0 +1,5 @@
+testcase,git.branch=the-branch,git.repo=example.com/org/the-repo,test.name=github.com/gotestyourself/gotestyourself/testjson/internal/badmain. count=1i,elapsed=0i,result="failed"
+testcase,git.branch=the-branch,git.repo=example.com/org/the-repo,test.name=github.com/gotestyourself/gotestyourself/testjson/internal/stub.TestFailed count=1i,elapsed=0i,result="failed" 1521758015277815574
+testcase,git.branch=the-branch,git.repo=example.com/org/the-repo,test.name=github.com/gotestyourself/gotestyourself/testjson/internal/stub.TestFailedWithStderr count=1i,elapsed=0i,result="failed" 1521758015277853355
+testcase,git.branch=the-branch,git.repo=example.com/org/the-repo,test.name=github.com/gotestyourself/gotestyourself/testjson/internal/stub.TestNestedWithFailure/c count=1i,elapsed=0i,result="failed" 1521758015277958256
+testcase,git.branch=the-branch,git.repo=example.com/org/the-repo,test.name=github.com/gotestyourself/gotestyourself/testjson/internal/stub.TestNestedWithFailure count=1i,elapsed=0i,result="failed" 1521758015277919051

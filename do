@@ -8,12 +8,12 @@ binary() {
 }
 
 update-golden() {
-    _update-golden
-    GOLANG_VERSION=1.13-alpine ./do shell bash -c 'go build; PATH=$PATH:. ./do _update-golden'
+    gotestsum -- . ./testjson ./internal/junitxml ./cmd/tool/{slowest,metrics} -test.update-golden
 }
 
-_update-golden() {
-    gotestsum -- . ./testjson ./internal/junitxml ./cmd/tool/slowest -test.update-golden
+update-golden-all-go-versions() {
+    update-golden
+    GOLANG_VERSION=1.13-alpine ./do shell bash -c 'go test . -test.update-golden'
 }
 
 lint() {

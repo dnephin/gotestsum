@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	protocol "github.com/influxdata/line-protocol"
 	"github.com/spf13/pflag"
 	"gotest.tools/gotestsum/log"
 	"gotest.tools/gotestsum/testjson"
@@ -44,6 +45,8 @@ func usage(out io.Writer, name string, flags *pflag.FlagSet) {
 	fmt.Fprintf(out, `Usage:
     %[1]s [flags]
 
+Read a json file and write out metrics about the run.
+
 Flags:
 `, name)
 	flags.SetOutput(out)
@@ -72,7 +75,7 @@ func run(opts *options) error {
 		return fmt.Errorf("failed to create output file: %v", err)
 	}
 	defer func() {
-		if err := in.Close(); err != nil {
+		if err := out.Close(); err != nil {
 			log.Errorf("Failed to close file %v: %v", opts.output, err)
 		}
 	}()
@@ -82,15 +85,39 @@ func run(opts *options) error {
 		return fmt.Errorf("failed to scan testjson: %v", err)
 	}
 
+	// TODO: support other output formats
 	return writeMetrics(out, exec, newTagSource(opts.tagSource.String()))
 }
 
 func writeMetrics(out io.Writer, exec *testjson.Execution, source tagSource) error {
-	for _, _ = range exec.Failed() {
-
+	e := protocol.NewEncoder(out)
+	e.FailOnFieldErr(true)
+	e.SetFieldSortOrder(protocol.SortFields)
+	for _, tc := range exec.Failed() {
+		if _, err := e.Encode(newMetric(tc, source)); err != nil {
+			return err
+		}
 	}
 	// TODO: emit metrics for non-failed tests as well?
 	return nil
+}
+
+func newMetric(tc testjson.TestCase, ts tagSource) protocol.Metric {
+	tags := ts.AsMap()
+	tags["test.name"] = tc.Package + "." + tc.Test
+
+	fields := map[string]interface{}{
+		"elapsed": tc.Elapsed.Nanoseconds(),
+		"count":   1, // TODO: is this necessary to sum, or is this provided automatically?
+		"result":  "failed",
+	}
+	metric, err := protocol.New("testcase", tags, fields, tc.Time)
+	if err != nil {
+		// protocol.New currently never returns an error. Handle the error with
+		// a log.Warn in case that changes in the future.
+		log.Warnf("unexpected error while creating metric: %v", err)
+	}
+	return metric
 }
 
 func jsonfileReader(v string) (io.ReadCloser, error) {
