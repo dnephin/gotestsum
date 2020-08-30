@@ -1,0 +1,15 @@
+
+ARG     GOLANG_VERSION
+FROM    golang:${GOLANG_VERSION:-1.15} as golang
+ENV     CGO_ENABLED=0 \
+        GO111MODULE=on
+
+FROM    golang as tools
+RUN     go get github.com/dnephin/filewatcher@v0.3.2
+RUN     go get gotest.tools/gotestsum@v0.5.2
+RUN     wget -O- -q https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s
+
+FROM    golang as dev
+COPY    --from=tools /go/bin/gotestsum /usr/bin/gotestsum
+COPY    --from=tools /go/bin/filewatcher /usr/bin/filewatcher
+COPY    --from=tools /go/bin/golangci-lint /usr/bin/golangci-lint
