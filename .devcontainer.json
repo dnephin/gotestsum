@@ -1,4 +1,4 @@
 {
-  "image": "golang:1.15"
+  "image": "docker.pkg.github.com/dnephin/gotestsum/golang:1.15"
 
 }
