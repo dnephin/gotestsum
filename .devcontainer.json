@@ -1,3 +1,4 @@
 {
-  "image": "dnephin/golang:1.15"
+  "image": "dnephin/golang:1.15",
+  "extensions": ["golang.Go"]
 }
