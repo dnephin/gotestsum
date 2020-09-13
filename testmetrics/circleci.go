@@ -71,7 +71,10 @@ func getArtifactURLs(ctx context.Context, c httpDoer, job CircleCIJob) (*respons
 	}
 	defer resp.Body.Close()
 
-	// TODO: check status code
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusBadRequest {
+		msg := readBodyError(resp.Body)
+		return nil, fmt.Errorf("failed to query artifact URLs: %v %v", resp.Status, msg)
+	}
 
 	arts := &responseArtifact{}
 	err = json.NewDecoder(resp.Body).Decode(arts)
