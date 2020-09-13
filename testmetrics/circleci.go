@@ -17,11 +17,9 @@ type CircleCIJob struct {
 	ArtifactGlob string
 }
 
-// GetCircleCIJsonFiles for a single CircleCI job. If the returned error is nil the
+// getCircleCIJsonFiles for a single CircleCI job. If the returned error is nil the
 // ReadClosers must be closed by the caller.
-func GetCircleCIJsonFiles(ctx context.Context, job CircleCIJob) ([]io.ReadCloser, error) {
-	client := &http.Client{}
-
+func getCircleCIJsonFiles(ctx context.Context, client httpDoer, job CircleCIJob) ([]io.ReadCloser, error) {
 	arts, err := getArtifactURLs(ctx, client, job)
 	if err != nil {
 		return nil, err
@@ -72,6 +70,8 @@ func getArtifactURLs(ctx context.Context, c httpDoer, job CircleCIJob) (*respons
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	// TODO: check status code
 
 	arts := &responseArtifact{}
 	err = json.NewDecoder(resp.Body).Decode(arts)

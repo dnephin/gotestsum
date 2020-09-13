@@ -7,6 +7,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/google/go-cmp v0.5.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	github.com/influxdata/line-protocol v0.0.0-20200327222509-2487e7298839
 	github.com/jonboulle/clockwork v0.1.0
 	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/pkg/errors v0.9.1

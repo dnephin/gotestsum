@@ -1,0 +1,4 @@
+testcase,branch=master,branch_category=trunk,repo=example.com/org/project,result=failed,test.name=pkg1.TestFair count=1i,elapsed=3200000000i 1580674820000004159
+testcase,branch=master,branch_category=trunk,repo=example.com/org/project,result=failed,test.name=pkg2.TestSoon count=1i,elapsed=1424000000i 1580674880000004159
+testcase,branch=master,branch_category=trunk,repo=example.com/org/project,result=slow,test.name=pkg1.TestFair count=1i,elapsed=3200000000i 1580674820000004159
+testcase,branch=master,branch_category=trunk,repo=example.com/org/project,result=slow,test.name=pkg3.TestOk count=1i,elapsed=3512000000i 1580674825000004159
