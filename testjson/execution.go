@@ -239,6 +239,8 @@ type TestCase struct {
 	// hasSubTestFailed is true when a subtest of this TestCase has failed. It is
 	// used to find root TestCases which have no failing subtests.
 	hasSubTestFailed bool
+	// Time when the test was run.
+	Time time.Time
 }
 
 func newPackage() *Package {
@@ -300,6 +302,7 @@ func (p *Package) addTestEvent(event TestEvent) {
 			Test:    event.Test,
 			ID:      p.Total,
 			RunID:   event.RunID,
+			Time:    event.Time,
 		}
 		p.running[event.Test] = tc
 

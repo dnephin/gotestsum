@@ -1,13 +1,56 @@
 package testmetrics
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"gotest.tools/gotestsum/internal/slowest"
 	"gotest.tools/gotestsum/testjson"
 )
+
+type Config struct {
+	Job      CircleCIJob
+	Target   InfluxDBTarget
+	Settings MetricConfig
+	Logger   Logger
+}
+
+type Logger interface {
+	Info(...interface{})
+}
+
+func Produce(ctx context.Context, cfg Config) error {
+	client := &http.Client{}
+
+	cfg.Logger.Info("Fetching jsonfiles from CircleCI artifacts")
+	in, err := getCircleCIJsonFiles(ctx, client, cfg.Job)
+	if err != nil {
+		return err
+	}
+
+	exec, err := buildExecution(in)
+	if err != nil || exec == nil {
+		return err
+	}
+
+	metrics, err := metricsFromExec(cfg.Settings, exec)
+	if err != nil {
+		return err
+	}
+
+	// TODO: set Metrics.Tags based on data from CircleCI job
+
+	encoded, err := encodeMetrics(metrics)
+	if err != nil {
+		return err
+	}
+
+	cfg.Logger.Info("Writing metrics to influxDB")
+	return writeInfluxData(ctx, client, cfg.Target, encoded)
+}
 
 type Metrics struct {
 	Slowest []testjson.TestCase
@@ -15,7 +58,7 @@ type Metrics struct {
 	Tags    map[string]string
 }
 
-type Config struct {
+type MetricConfig struct {
 	// MaxFailuresThreshold. If the test run has more than this number of failures
 	// no metrics will be emitted. This threshold is used to avoid sending
 	// metrics for test runs that failed due to real bugs or infrastructure problems.
@@ -32,16 +75,7 @@ type Config struct {
 	// TODO: patterns for BranchCategory
 }
 
-func metrics(cfg Config, in []io.ReadCloser) (Metrics, error) {
-	exec, err := buildExecution(in)
-	if err != nil || exec == nil {
-		return Metrics{}, err
-	}
-
-	return metricsFromExec(cfg, exec)
-}
-
-func metricsFromExec(cfg Config, exec *testjson.Execution) (Metrics, error) {
+func metricsFromExec(cfg MetricConfig, exec *testjson.Execution) (Metrics, error) {
 	var m Metrics
 
 	failed := exec.Failed()
