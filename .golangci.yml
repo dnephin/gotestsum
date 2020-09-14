@@ -21,6 +21,8 @@ issues:
       text: 'result .* is always'
     - linters: [unparam]
       text: 'always receives'
+    - linters: [errcheck]
+      text: 'resp.Body.Close()'
 
 linters:
   disable-all: true
@@ -39,7 +41,6 @@ linters:
     - govet
     - ineffassign
     - interfacer
-    - lll
     - misspell
     - nakedret
     - prealloc
