@@ -6,43 +6,37 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"gotest.tools/gotestsum/testmetrics"
 )
 
 func main() {
-	if err := run(os.Args); err != nil {
+	if err := run(os.Args[0]); err != nil {
 		log.Print("ERROR: ", err.Error())
 		os.Exit(1)
 	}
 }
 
-func run(args []string) error {
+func run(_ string) error {
 	ctx := context.Background()
 	log.SetFlags(0)
 
-	if len(args) < 2 {
-		return fmt.Errorf("job ID is required")
-	}
-
-	job, err := strconv.Atoi(args[1])
-	if err != nil {
-		return fmt.Errorf("invalud job ID %v: %w", args[1], err)
-	}
+	env := &env{}
 
 	cfg := testmetrics.Config{
 		Job: testmetrics.CircleCIJob{
-			ProjectSlug:  os.Getenv("CIRCLECI_PROJECT_SLUG"),
-			Job:          job,
-			Token:        os.Getenv("CIRCLECI_API_TOKEN"),
-			ArtifactGlob: os.Getenv("CIRCLECI_ARTIFACT_GLOB"),
+			ProjectSlug:  env.LookupEnv("CIRCLECI_PROJECT_SLUG"),
+			Job:          env.LookupInt("CIRCLECI_JOB"),
+			Token:        env.LookupEnv("CIRCLECI_API_TOKEN"),
+			ArtifactGlob: env.LookupEnv("CIRCLECI_ARTIFACT_GLOB"),
 		},
 		Target: testmetrics.InfluxDBTarget{
-			Addr:   os.Getenv("INFLUX_HOST"),
-			Bucket: os.Getenv("INFLUX_BUCKET_ID"),
-			Org:    os.Getenv("INFLUX_ORG_ID"),
-			Token:  os.Getenv("INFLUX_TOKEN"),
+			Addr:   env.LookupEnv("INFLUX_HOST"),
+			Bucket: env.LookupEnv("INFLUX_BUCKET_ID"),
+			Org:    env.LookupEnv("INFLUX_ORG_ID"),
+			Token:  env.LookupEnv("INFLUX_TOKEN"),
 		},
 		Settings: testmetrics.MetricConfig{
 			MaxFailuresThreshold: 10,
@@ -50,6 +44,9 @@ func run(args []string) error {
 			MaxSlowTests:         10,
 		},
 		Logger: logger{},
+	}
+	if err := env.Err(); err != nil {
+		return err
 	}
 
 	return testmetrics.Produce(ctx, cfg)
@@ -62,3 +59,48 @@ func (l logger) Info(i ...interface{}) {
 }
 
 var _ testmetrics.Logger = logger{}
+
+type env struct {
+	errs []error
+}
+
+func (e *env) LookupEnv(key string) string {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		e.errs = append(e.errs, fmt.Errorf("missing required value for %v", key))
+	}
+	return v
+}
+
+func (e *env) LookupInt(key string) int {
+	i := e.LookupEnv(key)
+	if i == "" {
+		return 0
+	}
+	v, err := strconv.Atoi(i)
+	if err != nil {
+		e.errs = append(e.errs, fmt.Errorf("invalid int for %v: %w", key, err))
+	}
+	return v
+}
+
+func (e *env) Err() error {
+	return fmtErrors("multiple errors while loading config from env", e.errs)
+}
+
+func fmtErrors(msg string, errs []error) error {
+	switch len(errs) {
+	case 0:
+		return nil
+	case 1:
+		return errs[0]
+	default:
+		b := new(strings.Builder)
+
+		for _, err := range errs {
+			b.WriteString("\n   ")
+			b.WriteString(err.Error())
+		}
+		return fmt.Errorf(msg+":%s\n", b.String())
+	}
+}

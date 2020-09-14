@@ -73,7 +73,7 @@ predefined statement, --skip-stmt=testing.Short, which uses this Go statement:
 Alternatively, a custom --skip-stmt may be provided as a string:
 
     skip_stmt='
-        if os.Getenv("TEST_FAST") {
+        if os.LookupEnv("TEST_FAST") {
             t.Skip("too slow for TEST_FAST")
         }
     '
