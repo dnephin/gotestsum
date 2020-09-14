@@ -82,7 +82,7 @@ func getArtifactURLs(ctx context.Context, c httpDoer, job CircleCIJob) (*respons
 }
 
 func filterArtifactURLs(arts responseArtifact, glob string) ([]string, error) {
-	var result []string
+	result := make([]string, 0, len(arts.Items))
 	for _, item := range arts.Items {
 		switch matched, err := path.Match(glob, item.Path); {
 		case err != nil:
@@ -95,6 +95,9 @@ func filterArtifactURLs(arts responseArtifact, glob string) ([]string, error) {
 	return result, nil
 }
 
+// getArtifact from url. The caller must close the returned ReadCloser.
+//
+// nolint: bodyclose
 func getArtifact(ctx context.Context, c httpDoer, url string) (io.ReadCloser, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
