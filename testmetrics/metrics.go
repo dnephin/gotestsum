@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"time"
 
 	"gotest.tools/gotestsum/internal/slowest"
@@ -13,9 +12,13 @@ import (
 
 type Config struct {
 	Job      CircleCIJob
-	Target   InfluxDBTarget
+	Emitter  MetricsEmitter
 	Settings MetricConfig
 	Logger   Logger
+}
+
+type MetricsEmitter interface {
+	Emit(ctx context.Context, metrics Metrics) error
 }
 
 type Logger interface {
@@ -23,10 +26,8 @@ type Logger interface {
 }
 
 func Produce(ctx context.Context, cfg Config) error {
-	client := &http.Client{}
-
 	cfg.Logger.Info("Fetching jsonfiles from CircleCI artifacts")
-	in, err := getCircleCIJsonFiles(ctx, client, cfg.Job)
+	in, err := getCircleCIJsonFiles(ctx, cfg.Job)
 	if err != nil {
 		return err
 	}
@@ -43,13 +44,9 @@ func Produce(ctx context.Context, cfg Config) error {
 
 	// TODO: set Metrics.Tags based on data from CircleCI job
 
-	encoded, err := encodeMetrics(metrics)
-	if err != nil {
-		return err
-	}
-
 	cfg.Logger.Info("Writing metrics to influxDB")
-	return writeInfluxData(ctx, client, cfg.Target, encoded)
+
+	return cfg.Emitter.Emit(ctx, metrics)
 }
 
 type Metrics struct {

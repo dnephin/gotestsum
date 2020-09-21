@@ -19,17 +19,17 @@ func TestWriteInfluxData(t *testing.T) {
 	skip.If(t, token == "", "INFLUX_TOKEN env var is required")
 	t.Skip("skip to avoid hitting API rate limit")
 
-	target := InfluxDBTarget{
+	target := InfluxDBEmitter{
 		Addr:   os.Getenv("INFLUX_HOST"),
 		Bucket: os.Getenv("INFLUX_BUCKET_ID"),
 		Org:    os.Getenv("INFLUX_ORG_ID"),
 		Token:  token,
+		Client: &http.Client{},
 	}
 
 	body := golden.Get(t, "expected-encode-metrics")
 	ctx := context.Background()
-	client := &http.Client{}
-	err := writeInfluxData(ctx, client, target, bytes.NewReader(body))
+	err := writeInfluxData(ctx, target, bytes.NewReader(body))
 	assert.NilError(t, err)
 }
 
