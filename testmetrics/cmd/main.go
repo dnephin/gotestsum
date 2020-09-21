@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ func run(_ string) error {
 	log.SetFlags(0)
 
 	env := &env{}
+	client := &http.Client{}
 
 	cfg := testmetrics.Config{
 		Job: testmetrics.CircleCIJob{
@@ -31,12 +33,14 @@ func run(_ string) error {
 			Job:          env.LookupInt("CIRCLECI_JOB"),
 			Token:        env.LookupEnv("CIRCLECI_API_TOKEN"),
 			ArtifactGlob: env.LookupEnv("CIRCLECI_ARTIFACT_GLOB"),
+			Client:       client,
 		},
-		Target: testmetrics.InfluxDBTarget{
+		Emitter: testmetrics.InfluxDBEmitter{
 			Addr:   env.LookupEnv("INFLUX_HOST"),
 			Bucket: env.LookupEnv("INFLUX_BUCKET_ID"),
 			Org:    env.LookupEnv("INFLUX_ORG_ID"),
 			Token:  env.LookupEnv("INFLUX_TOKEN"),
+			Client: client,
 		},
 		Settings: testmetrics.MetricConfig{
 			MaxFailuresThreshold: 10,

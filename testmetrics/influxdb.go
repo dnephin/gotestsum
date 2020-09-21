@@ -14,14 +14,24 @@ import (
 	"gotest.tools/gotestsum/testjson"
 )
 
-type InfluxDBTarget struct {
+type InfluxDBEmitter struct {
 	Addr   string
 	Bucket string
 	Org    string
 	Token  string
+	Client httpDoer
 }
 
-func writeInfluxData(ctx context.Context, c httpDoer, target InfluxDBTarget, data io.Reader) error {
+func (e InfluxDBEmitter) Emit(ctx context.Context, metrics Metrics) error {
+	encoded, err := encodeMetrics(metrics)
+	if err != nil {
+		return err
+	}
+
+	return writeInfluxData(ctx, e, encoded)
+}
+
+func writeInfluxData(ctx context.Context, target InfluxDBEmitter, data io.Reader) error {
 	v := url.Values{}
 	v.Add("bucket", target.Bucket)
 	v.Add("org", target.Org)
@@ -35,7 +45,7 @@ func writeInfluxData(ctx context.Context, c httpDoer, target InfluxDBTarget, dat
 	req.Header.Add("Content-Type", "text/plain; charset=utf-8")
 	req.Header.Add("Authorization", "Token "+target.Token)
 
-	resp, err := c.Do(req.WithContext(ctx))
+	resp, err := target.Client.Do(req.WithContext(ctx))
 	if err != nil {
 		return err
 	}
