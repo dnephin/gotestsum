@@ -1,10 +1,11 @@
-package testmetrics
+package reaction
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
@@ -80,6 +81,14 @@ func getArtifactURLs(ctx context.Context, c httpDoer, job CircleCIJob) (*respons
 	arts := &responseArtifact{}
 	err = json.NewDecoder(resp.Body).Decode(arts)
 	return arts, err
+}
+
+func readBodyError(body io.Reader) string {
+	msg, err := ioutil.ReadAll(body)
+	if err != nil {
+		return fmt.Sprintf("failed to read response body: %v", err)
+	}
+	return string(msg)
 }
 
 func filterArtifactURLs(arts responseArtifact, glob string) ([]string, error) {

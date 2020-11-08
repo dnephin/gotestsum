@@ -1,4 +1,4 @@
-package testmetrics
+package reaction
 
 import (
 	"context"

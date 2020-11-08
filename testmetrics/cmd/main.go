@@ -28,13 +28,7 @@ func run(_ string) error {
 	client := &http.Client{}
 
 	cfg := testmetrics.Config{
-		Job: testmetrics.CircleCIJob{
-			ProjectSlug:  env.LookupEnv("CIRCLECI_PROJECT_SLUG"),
-			Job:          env.LookupInt("CIRCLECI_JOB"),
-			Token:        env.LookupEnv("CIRCLECI_API_TOKEN"),
-			ArtifactGlob: env.LookupEnv("CIRCLECI_ARTIFACT_GLOB"),
-			Client:       client,
-		},
+		// TODO: Source: ...
 		Emitter: testmetrics.InfluxDBEmitter{
 			Addr:   env.LookupEnv("INFLUX_HOST"),
 			Bucket: env.LookupEnv("INFLUX_BUCKET_ID"),

@@ -22,6 +22,10 @@ type InfluxDBEmitter struct {
 	Client httpDoer
 }
 
+type httpDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
 func (e InfluxDBEmitter) Emit(ctx context.Context, metrics Metrics) error {
 	encoded, err := encodeMetrics(metrics)
 	if err != nil {

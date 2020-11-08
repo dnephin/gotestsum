@@ -11,7 +11,7 @@ import (
 )
 
 type Config struct {
-	Job      CircleCIJob
+	Source   []io.ReadCloser
 	Emitter  MetricsEmitter
 	Settings MetricConfig
 	Logger   Logger
@@ -26,13 +26,7 @@ type Logger interface {
 }
 
 func Produce(ctx context.Context, cfg Config) error {
-	cfg.Logger.Info("Fetching jsonfiles from CircleCI artifacts")
-	in, err := getCircleCIJsonFiles(ctx, cfg.Job)
-	if err != nil {
-		return err
-	}
-
-	exec, err := buildExecution(in)
+	exec, err := buildExecution(cfg.Source)
 	if err != nil || exec == nil {
 		return err
 	}
