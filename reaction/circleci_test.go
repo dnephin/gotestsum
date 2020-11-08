@@ -17,9 +17,9 @@ func TestGetArtifactsURLs(t *testing.T) {
 
 	ctx := context.Background()
 	// TODO: test may start to fail after 30 days since artifacts are deleted.
-	job := CircleCIJob{
+	job := artifactURLRequest{
 		ProjectSlug: "github/hashicorp/consul",
-		Job:         236276,
+		JobNum:      236276,
 		Token:       token,
 	}
 	arts, err := getArtifactURLs(ctx, &http.Client{}, job)
@@ -44,4 +44,32 @@ func TestFilterArtifactURLs(t *testing.T) {
 		"https://artifacts/tmp/jsonfile/go-test-2.log",
 	}
 	assert.DeepEqual(t, urls, expected)
+}
+
+func TestWorkflowJobs(t *testing.T) {
+	token := os.Getenv("CIRCLECI_API_TOKEN")
+	skip.If(t, token == "", "CIRCLECI_API_TOKEN env var is required")
+	t.Skip("skip to avoid hitting API rate limit")
+
+	ctx := context.Background()
+	req := workflowJobsRequest{
+		WorkflowID: "f44ffea6-9814-4906-ab29-b8235d0ee4ed",
+		Token:      token,
+	}
+
+	jobs, err := getWorkflowJobs(ctx, &http.Client{}, req)
+	assert.NilError(t, err)
+	expected := []workflowJob{
+		{Name: "test-connect-ca-providers", Num: 275978},
+		{Name: "lint-consul-retry", Num: 275961},
+		{Name: "lint", Num: 275970},
+		{Name: "go-test-sdk", Num: 275973},
+		{Name: "go-test-race", Num: 275977},
+		{Name: "dev-build", Num: 275974},
+		{Name: "go-test", Num: 276015},
+		{Name: "go-test-api", Num: 276016},
+		{Name: "check-vendor", Num: 275967},
+		{Name: "check-generated-protobuf", Num: 275963},
+	}
+	assert.DeepEqual(t, jobs, expected)
 }
