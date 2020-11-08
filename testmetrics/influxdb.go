@@ -101,7 +101,7 @@ func newInfluxMetric(tc testjson.TestCase, result string, tags map[string]string
 
 	// Add the tags to the constructed metric to avoid creating another copy
 	// of the tags map. protocol.New makes a copy.
-	metric.AddTag("test.name", tc.Package+"."+tc.Test)
+	metric.AddTag("test.name", tc.Package+"."+tc.Test.Name())
 	metric.AddTag("result", result)
 	return metric
 }

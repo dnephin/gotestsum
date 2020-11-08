@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"gotest.tools/gotestsum/internal/slowest"
+	"gotest.tools/gotestsum/internal/aggregate"
 	"gotest.tools/gotestsum/testjson"
 )
 
@@ -81,7 +81,7 @@ func metricsFromExec(cfg MetricConfig, exec *testjson.Execution) (Metrics, error
 	}
 	m.Failed = failed
 
-	m.Slowest = slowest.TestCasesFromExec(exec, cfg.SlowTestThreshold)
+	m.Slowest = aggregate.Slowest(exec, cfg.SlowTestThreshold)
 	if len(m.Slowest) > cfg.MaxSlowTests {
 		m.Slowest = m.Slowest[:cfg.MaxSlowTests]
 	}
