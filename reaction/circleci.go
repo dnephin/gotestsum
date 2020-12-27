@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+
+	"gotest.tools/gotestsum/log"
 )
 
 type CircleCIConfig struct {
@@ -16,45 +18,57 @@ type CircleCIConfig struct {
 	Token       string
 	Client      httpDoer
 
-	ArtifactPattern string
-	JobPattern      string
-
 	JobNum     int
 	WorkflowID string
+	JobPattern string
+
+	Actions Actions
 }
 
-// getJsonFilesFromJob for a single CircleCI job. If the returned error is nil the
-// ReadClosers must be closed by the caller.
-func getJsonFilesFromJob(ctx context.Context, cfg CircleCIConfig) ([]io.ReadCloser, error) {
-	req := artifactURLRequest{
-		ProjectSlug: cfg.ProjectSlug,
-		JobNum:      cfg.JobNum,
-		Token:       cfg.Token,
-	}
-	arts, err := getArtifactURLs(ctx, cfg.Client, req)
+type Actions struct {
+	RerunFailsReportPattern string
+}
+
+func Act(ctx context.Context, cfg CircleCIConfig) error {
+	jobs, err := getJobArtifacts(ctx, cfg)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to get artifacts for job(s): %w", err)
+	}
+	log.Debugf("found %d job(s)", len(jobs))
+
+	for _, job := range jobs {
+		for _, art := range job.Artifacts {
+			switch matched, err := path.Match(cfg.Actions.RerunFailsReportPattern, art.Path); {
+			case err != nil:
+				return err
+			case matched:
+				// TODO:
+				log.Warnf("action for %v", art)
+				continue
+			}
+
+			log.Debugf("artifact %v matched no patterns (%v)",
+				art.Path, cfg.Actions.RerunFailsReportPattern)
+		}
 	}
 
-	urls, err := filterArtifactURLs(*arts, cfg.ArtifactPattern)
-	if err != nil {
-		return nil, err
-	}
+	return nil
+}
 
-	result := make([]io.ReadCloser, 0, len(urls))
-	for _, u := range urls {
-		body, err := getArtifact(ctx, cfg.Client, u)
+func getJobArtifacts(ctx context.Context, cfg CircleCIConfig) ([]jobArtifacts, error) {
+	if cfg.JobNum != 0 {
+		arts, err := getArtifactURLsForJob(ctx, cfg)
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, body)
+		// TODO: Job name is not set
+		return []jobArtifacts{{Artifacts: arts}}, nil
 	}
-	return result, nil
+	return getArtifactURLsForWorkflow(ctx, cfg)
 }
 
-// getJsonFilesFromWorkflow for projects with Github Checks enabled. If the
-// returned error is nil the ReadClosers must be closed by the caller.
-func getJsonFilesFromWorkflow(ctx context.Context, cfg CircleCIConfig) ([]jobArtifacts, error) {
+// getArtifactURLsForWorkflow for projects with Github Checks enabled.
+func getArtifactURLsForWorkflow(ctx context.Context, cfg CircleCIConfig) ([]jobArtifacts, error) {
 	jobs, err := getWorkflowJobs(ctx, cfg.Client, workflowJobsRequest{
 		WorkflowID: cfg.WorkflowID,
 		Token:      cfg.Token,
@@ -67,27 +81,40 @@ func getJsonFilesFromWorkflow(ctx context.Context, cfg CircleCIConfig) ([]jobArt
 	for _, job := range jobs {
 		switch matched, err := path.Match(cfg.JobPattern, job.Name); {
 		case err != nil:
-			// TODO: close existing readers
 			return nil, err
 		case !matched:
 			continue
 		}
 
 		cfg.JobNum = job.Num
-		files, err := getJsonFilesFromJob(ctx, cfg)
+		arts, err := getArtifactURLsForJob(ctx, cfg)
 		if err != nil {
-			// TODO: close existing readers
 			return nil, err
 		}
 
-		result = append(result, jobArtifacts{Job: job.Name, Files: files})
+		log.Debugf("found %d artifacts for job %v", len(arts), job.Name)
+		result = append(result, jobArtifacts{Job: job.Name, Artifacts: arts})
 	}
 	return result, nil
 }
 
 type jobArtifacts struct {
-	Job   string
-	Files []io.ReadCloser
+	Job       string
+	Artifacts []responseArtifactItem
+}
+
+// getArtifactURLsForJob for a single CircleCI job.
+func getArtifactURLsForJob(ctx context.Context, cfg CircleCIConfig) ([]responseArtifactItem, error) {
+	req := artifactURLRequest{
+		ProjectSlug: cfg.ProjectSlug,
+		JobNum:      cfg.JobNum,
+		Token:       cfg.Token,
+	}
+	arts, err := getArtifactURLs(ctx, cfg.Client, req)
+	if err != nil {
+		return nil, err
+	}
+	return arts.Items, nil
 }
 
 type responseArtifact struct {
