@@ -77,7 +77,7 @@ func getArtifactURLsForWorkflow(ctx context.Context, cfg CircleCIConfig) ([]jobA
 		return nil, err
 	}
 
-	var result []jobArtifacts
+	var result []jobArtifacts // nolint:prealloc
 	for _, job := range jobs {
 		switch matched, err := path.Match(cfg.JobPattern, job.Name); {
 		case err != nil:
@@ -239,7 +239,7 @@ type workflowJob struct {
 	Num  int    `json:"job_number"`
 }
 
-func decodeWorkflowJobs(body io.ReadCloser) ([]workflowJob, error) {
+func decodeWorkflowJobs(body io.Reader) ([]workflowJob, error) {
 	type response struct {
 		Items []workflowJob
 	}
