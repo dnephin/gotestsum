@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 
 	"gotest.tools/gotestsum/log"
 )
@@ -21,38 +22,62 @@ type CircleCIConfig struct {
 	JobNum     int
 	WorkflowID string
 	JobPattern string
-
-	Actions Actions
 }
 
-type Actions struct {
+type Config struct {
+	CircleCIConfig CircleCIConfig
+	ActionConfig   ActionConfig
+	GithubConfig   GithubConfig
+}
+
+type ActionConfig struct {
 	RerunFailsReportPattern string
 }
 
-func Act(ctx context.Context, cfg CircleCIConfig) error {
-	jobs, err := getJobArtifacts(ctx, cfg)
+func Act(ctx context.Context, cfg Config) error {
+	jobs, err := getJobArtifacts(ctx, cfg.CircleCIConfig)
 	if err != nil {
 		return fmt.Errorf("failed to get artifacts for job(s): %w", err)
 	}
 	log.Debugf("found %d job(s)", len(jobs))
 
+	var errs []error
 	for _, job := range jobs {
 		for _, art := range job.Artifacts {
-			switch matched, err := path.Match(cfg.Actions.RerunFailsReportPattern, art.Path); {
+			switch matched, err := path.Match(cfg.ActionConfig.RerunFailsReportPattern, art.Path); {
 			case err != nil:
-				return err
+				errs = append(errs, err)
+				continue
 			case matched:
-				// TODO:
-				log.Warnf("action for %v", art)
+				if err := actionRerunFailsReport(ctx, cfg.GithubConfig, art.URL); err != nil {
+					errs = append(errs, err)
+				}
 				continue
 			}
 
 			log.Debugf("artifact %v matched no patterns (%v)",
-				art.Path, cfg.Actions.RerunFailsReportPattern)
+				art.Path, cfg.ActionConfig.RerunFailsReportPattern)
 		}
 	}
 
-	return nil
+	return fmtErrors("failed to perform some actions", errs)
+}
+
+func fmtErrors(msg string, errs []error) error {
+	switch len(errs) {
+	case 0:
+		return nil
+	case 1:
+		return errs[0]
+	default:
+		b := new(strings.Builder)
+
+		for _, err := range errs {
+			b.WriteString("\n   ")
+			b.WriteString(err.Error())
+		}
+		return fmt.Errorf(msg+":%s\n", b.String())
+	}
 }
 
 func getJobArtifacts(ctx context.Context, cfg CircleCIConfig) ([]jobArtifacts, error) {

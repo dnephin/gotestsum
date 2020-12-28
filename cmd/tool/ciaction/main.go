@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -39,9 +40,17 @@ func setupFlags(name string) (*pflag.FlagSet, *options) {
 
 	opts.circleCI.token = os.Getenv("CIRCLECI_TOKEN")
 	opts.circleCI.workflowID = getWorkflowID()
-	opts.circleCI.projectSlug = os.Getenv("CIRCLECI_PROJECT_SLUG")
 	opts.circleCI.jobPattern = getEnvWithDefault("CIRCLECI_JOB_PATTERN", "*")
 	opts.circleCI.rerunFailsReportPattern = getEnvWithDefault("RERUN_FAILS_PATTERN", "tmp/rerun-fails-report")
+
+	opts.github.project = os.Getenv("GITHUB_PROJECT")
+	opts.github.token = os.Getenv("GITHUB_TOKEN")
+
+	var err error
+	opts.github.pullRequest, err = getEnvInt("GITHUB_PR")
+	if err != nil {
+		log.Warnf("failed to parse GITHUB_PR: %v", err)
+	}
 
 	return flags, opts
 }
@@ -69,6 +78,11 @@ func getEnvWithDefault(key, def string) string {
 	return def
 }
 
+func getEnvInt(key string) (int, error) {
+	v := os.Getenv(key)
+	return strconv.Atoi(v)
+}
+
 func usage(out io.Writer, name string, flags *pflag.FlagSet) {
 	fmt.Fprintf(out, `Usage:
     %[1]s [flags]
@@ -84,6 +98,7 @@ Flags:
 
 type options struct {
 	circleCI circleCI
+	github   github
 	debug    bool
 }
 
@@ -91,9 +106,14 @@ type circleCI struct {
 	workflowID              string
 	jobNum                  int
 	token                   string
-	projectSlug             string
 	jobPattern              string
 	rerunFailsReportPattern string
+}
+
+type github struct {
+	token       string
+	project     string
+	pullRequest int
 }
 
 func (o options) Validate() error {
@@ -103,8 +123,8 @@ func (o options) Validate() error {
 	if o.circleCI.token == "" {
 		return fmt.Errorf("a CIRCLECI_TOKEN is required")
 	}
-	if o.circleCI.projectSlug == "" {
-		return fmt.Errorf("a CIRCLECI_PROJECT slug is required")
+	if o.github.project == "" {
+		return fmt.Errorf("a GITHUB_PROJECT is required")
 	}
 	return nil
 }
@@ -118,21 +138,30 @@ func run(opts *options) error {
 	}
 
 	ctx := context.Background()
-	cfg := newCircleCIConfigFromOptions(opts)
+	cfg := newConfigFromOptions(opts)
 	err := reaction.Act(ctx, cfg)
 	return err
 }
 
-func newCircleCIConfigFromOptions(opts *options) reaction.CircleCIConfig {
-	return reaction.CircleCIConfig{
-		ProjectSlug: opts.circleCI.projectSlug,
-		Token:       opts.circleCI.token,
-		Client:      &http.Client{},
-		JobNum:      opts.circleCI.jobNum,
-		WorkflowID:  opts.circleCI.workflowID,
-		JobPattern:  opts.circleCI.jobPattern,
-		Actions: reaction.Actions{
+func newConfigFromOptions(opts *options) reaction.Config {
+	client := &http.Client{}
+	return reaction.Config{
+		CircleCIConfig: reaction.CircleCIConfig{
+			ProjectSlug: "gh/" + opts.github.project,
+			Token:       opts.circleCI.token,
+			Client:      client,
+			JobNum:      opts.circleCI.jobNum,
+			WorkflowID:  opts.circleCI.workflowID,
+			JobPattern:  opts.circleCI.jobPattern,
+		},
+		ActionConfig: reaction.ActionConfig{
 			RerunFailsReportPattern: opts.circleCI.rerunFailsReportPattern,
+		},
+		GithubConfig: reaction.GithubConfig{
+			Token:    opts.github.token,
+			Project:  opts.github.project,
+			PRNumber: opts.github.pullRequest,
+			Client:   client,
 		},
 	}
 }
